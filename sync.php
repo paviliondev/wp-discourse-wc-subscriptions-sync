@@ -1,12 +1,12 @@
 <?php
 /**
  * Plugin Name: Discourse WC Subscriptions Sync
- * Description: Use Discourse as a community engine for your WordPress blog
+ * Description: Sync WC Subscriptions with discourse groups
  * Version: 1.0.0
  * Author: fzngagan@gmail.com
  * Author URI: https://github.com/fzngagan
- * Plugin URI: https://github.com/paviliondev/wp-discourse-wc-memberships-sync
- * GitHub Plugin URI: https://github.com/paviliondev/wp-discourse-wc-memberships-sync
+ * Plugin URI: https://github.com/paviliondev/wp-discourse-wc-subscriptions-sync
+ * GitHub Plugin URI: https://github.com/paviliondev/wp-discourse-wc-subscriptions-sync
  */
 
 use WPDiscourse\Utilities\Utilities as Utilities;
@@ -14,18 +14,29 @@ use WPDiscourse\Utilities\Utilities as Utilities;
 // use status changed hook, 
 //active statuses: active and pending cancellation
 // all statuses wcs_get_subscription_statuses
-define('SUBSCRIPTION_PRODUCT_ID', 76);
-define('SUBSCRIPTION_DISCOURSE_GROUP', 'locker');
-const PV_SUBSCRIPTION_ACTIVE_STATUSES = array('active');
+const SUBSCRIPTION_PRODUCT_IDS =  array(13104, 13106, 13113);
+define('SUBSCRIPTION_DISCOURSE_GROUP', 'VIP');
+const PV_SUBSCRIPTION_ACTIVE_STATUSES = array('active', 'pending-cancel');
 
 add_action('woocommerce_subscription_status_updated', 'pv_handle_subscription_update', 10 , 3);
 function pv_handle_subscription_update ($subscription, $new_status, $old_status) {
-	if(!$subscription->has_product(SUBSCRIPTION_PRODUCT_ID)) return;
+	if(!pv_subscription_contains_products(SUBSCRIPTION_PRODUCT_IDS, $subscription)) return;
 
 	$active = (in_array($new_status, PV_SUBSCRIPTION_ACTIVE_STATUSES));
 	$user_id = $subscription->get_user_id();
 	$user = pv_create_or_get_user($user_id);
 	pv_update_discourse_membership($user, SUBSCRIPTION_DISCOURSE_GROUP, $active);
+}
+// this function checks whether the subscription contains atleast
+// one of the products tied to discourse group membership
+function pv_subscription_contains_products($product_ids, $subscription) {
+	foreach($product_ids as $product_id) {
+		if($subscription->has_product($product_id)) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 function pv_create_or_get_user($user_id) {
