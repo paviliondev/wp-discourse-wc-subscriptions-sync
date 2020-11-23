@@ -130,6 +130,73 @@ function pv_get_api_credentials() {
 		'api_username' => $api_username,
 	);
 }
+
+ function pv_create_discourse_user( $user, $password, $require_activation = true ) {
+
+	$api_credentials = pv_get_api_credentials();
+	if ( is_wp_error( $api_credentials ) ) {
+
+		return new \WP_Error( 'wpdc_configuration_error', 'The Discourse Connection options are not properly configured.' );
+	}
+
+	if ( empty( $user ) || empty( $user->ID ) || is_wp_error( $user ) ) {
+
+		return new \WP_Error( 'wpdc_user_not_set_error', 'The Discourse user you are attempting to create does not exist on WordPress.' );
+	}
+
+	$require_activation = apply_filters( 'wpdc_auto_create_user_require_activation', $require_activation, $user );
+	$create_user_url    = esc_url_raw( "{$api_credentials['url']}/users" );
+	$username           = $user->user_login;
+	$name               = $user->display_name;
+	$email              = $user->user_email;
+	$password           = $password;
+	$response           = wp_remote_post(
+		$create_user_url,
+		array(
+			'method'  => 'POST',
+			'body'    => array(
+				'name'     => $name,
+				'email'    => $email,
+				'password' => $password,
+				'username' => $username,
+				'active'   => $require_activation ? 'false' : 'true',
+				'approved' => 'true',
+			),
+			'headers' => array(
+				'Api-Key'      => sanitize_key( $api_credentials['api_key'] ),
+				'Api-Username' => sanitize_text_field( $api_credentials['api_username'] ),
+			),
+		)
+	);
+
+	if ( ! Utilities::validate( $response ) ) {
+
+		return new \WP_Error( wp_remote_retrieve_response_code( $response ), 'An error was returned from Discourse when attempting to create a user.' );
+	}
+
+	$user_data = json_decode( wp_remote_retrieve_body( $response ) );
+	if ( empty( $user_data->success ) ) {
+
+		return new \WP_Error( 'wpdc_response_error', $user_data->message );
+	}
+
+	if ( isset( $user_data->user_id ) ) {
+
+		return $user_data->user_id;
+	}
+
+	return new \WP_Error( wp_remote_retrieve_response_code( $response ), 'The Discourse user could not be created.' );
+}
+
+add_action('woocommerce_checkout_update_user_meta', 'pv_create_user_for_subscription', 10, 2);
+function pv_create_user_for_subscription($customer_id, $data) {
+		$cart_contents = WC()->cart->get_cart_contents();
+		$product_ids = wp_list_pluck($cart_contents, 'product_id');
+		if(!array_intersect($product_ids, SUBSCRIPTION_PRODUCT_IDS)) return;
+
+		pv_create_discourse_user(get_userdata($customer_id), $data['account_password'], true);
+}
+
 // debugging function
 function pv_print_and_die($obj) {
 	echo '<pre>';
