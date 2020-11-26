@@ -197,6 +197,13 @@ function pv_create_user_for_subscription($customer_id, $data) {
 		pv_create_discourse_user(get_userdata($customer_id), $data['account_password'], true);
 }
 
+add_action('woocommerce_after_checkout_validation', 'pv_validate_checkout_password', 10, 2);
+ function pv_validate_checkout_password($data, $errors) {
+	if(!$data['account_password'] || (strlen($data['account_password']) < 8)) {
+		$errors->add('password_validation', 'password should be minimum 8 characters or more');
+	}
+}
+
 // debugging function
 function pv_print_and_die($obj) {
 	echo '<pre>';
